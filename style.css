@@ -20,6 +20,16 @@ h1 {
     margin-bottom: 20px;
 }
 
+#current-mode {
+    display: block;
+    font-weight: bold;
+    margin-bottom: 10px;
+}
+
+.game-info div {
+    margin-top: 5px;
+}
+
 .game-info {
     display: flex;
     justify-content: space-around;
@@ -34,6 +44,12 @@ h1 {
 
 .controls {
     margin-top: 20px;
+}
+
+.controls p {
+    margin: 10px 0;
+    font-size: 14px;
+    color: #666;
 }
 
 button {

@@ -7,7 +7,9 @@ const pauseBtn = document.getElementById('pause-btn');
 const restartBtn = document.getElementById('restart-btn');
 const gameOverDiv = document.getElementById('game-over');
 const scoreList = document.getElementById('score-list');
+const evilCountElement = document.getElementById('evil-count');
 const modeBtn = document.getElementById('mode-btn');
+const currentModeSpan = document.getElementById('current-mode');
 
 const gridSize = 20;
 const tileCount = 20;
@@ -19,7 +21,7 @@ let food = {x: 15, y: 15};
 let score = 0;
 let scores = JSON.parse(localStorage.getItem('snakeScores')) || [];
 let evilSnakes = [];
-let evilMode = false;
+let evilMode = true; // default to Evil mode to make behavior visible
 let spawnTimer = 0;
 let gameRunning = false;
 let gamePaused = false;
@@ -57,6 +59,8 @@ function drawGame() {
     
     // Draw food
     drawTile(food.x, food.y, 'blue');
+    
+    updateStatus();
 }
 
 function moveSnake() {
@@ -76,15 +80,15 @@ function moveSnake() {
     
     // Check evil snake collisions
     for (let evil of evilSnakes) {
-        if (evil.body.some(segment => segment.x === head.x && segment.y === head.y)) {
-            gameOver();
-            return;
-        }
         if (evil.body[0].x === head.x && evil.body[0].y === head.y) {
-            // Kill evil snake
+            // Kill evil snake head-first
             score += 50;
             scoreElement.textContent = score;
             evilSnakes = evilSnakes.filter(e => e !== evil);
+            return;
+        }
+        if (evil.body.slice(1).some(segment => segment.x === head.x && segment.y === head.y)) {
+            gameOver();
             return;
         }
     }
@@ -109,40 +113,49 @@ function moveEvilSnakes() {
         let dx = playerHead.x - evilHead.x;
         let dy = playerHead.y - evilHead.y;
         
-        // Choose direction to move closer
-        let newDir = {x: 0, y: 0};
-        if (Math.abs(dx) > Math.abs(dy)) {
-            newDir.x = dx > 0 ? 1 : -1;
-        } else {
-            newDir.y = dy > 0 ? 1 : -1;
+        // Get valid move options
+        const options = [];
+        const directions = [
+            {x: 1, y: 0},
+            {x: -1, y: 0},
+            {x: 0, y: 1},
+            {x: 0, y: -1}
+        ];
+        
+        for (let dir of directions) {
+            const newHead = {x: evilHead.x + dir.x, y: evilHead.y + dir.y};
+            
+            // Check bounds
+            if (newHead.x < 0 || newHead.x >= tileCount || newHead.y < 0 || newHead.y >= tileCount) continue;
+            
+            // Check self collision
+            if (evil.body.some(segment => segment.x === newHead.x && segment.y === newHead.y)) continue;
+            
+            // Check reverse
+            if (dir.x === -evil.direction.x && dir.y === -evil.direction.y) continue;
+            
+            // Score this direction by distance to player
+            const distance = Math.abs(playerHead.x - newHead.x) + Math.abs(playerHead.y - newHead.y);
+            options.push({dir, distance});
         }
         
-        // Avoid reverse
-        if (newDir.x === -evil.direction.x && newDir.y === -evil.direction.y) {
-            // If would reverse, choose perpendicular
-            if (Math.abs(dx) > Math.abs(dy)) {
-                newDir = {x: 0, y: dy > 0 ? 1 : -1};
+        // Choose direction that minimizes distance to player
+        if (options.length === 0) {
+            // Trapped, just pick reverse direction if possible
+            const reverseDir = {x: -evil.direction.x, y: -evil.direction.y};
+            const reverseHead = {x: evilHead.x + reverseDir.x, y: evilHead.y + reverseDir.y};
+            if (reverseHead.x >= 0 && reverseHead.x < tileCount && reverseHead.y >= 0 && reverseHead.y < tileCount) {
+                evil.direction = reverseDir;
             } else {
-                newDir = {x: dx > 0 ? 1 : -1, y: 0};
+                evilSnakes = evilSnakes.filter(e => e !== evil);
+                return;
             }
+        } else {
+            options.sort((a, b) => a.distance - b.distance);
+            evil.direction = options[0].dir;
         }
         
-        evil.direction = newDir;
-        
-        const newHead = {x: evilHead.x + newDir.x, y: evilHead.y + newDir.y};
-        
-        // Check wall
-        if (newHead.x < 0 || newHead.x >= tileCount || newHead.y < 0 || newHead.y >= tileCount) {
-            evilSnakes = evilSnakes.filter(e => e !== evil);
-            return;
-        }
-        
-        // Check self
-        if (evil.body.some(segment => segment.x === newHead.x && segment.y === newHead.y)) {
-            evilSnakes = evilSnakes.filter(e => e !== evil);
-            return;
-        }
-        
+        const newHead = {x: evilHead.x + evil.direction.x, y: evilHead.y + evil.direction.y};
         evil.body.unshift(newHead);
         evil.body.pop();
     });
@@ -158,24 +171,75 @@ function generateFood() {
     );
 }
 
-function spawnEvilSnake() {
+function spawnEvilSnake(preferOpposite = false) {
     if (evilSnakes.length >= 3) return;
-    
-    let x, y;
-    do {
-        x = Math.floor(Math.random() * tileCount);
-        y = Math.floor(Math.random() * tileCount);
-    } while (
-        snake.some(s => s.x === x && s.y === y) ||
-        evilSnakes.some(e => e.body.some(b => b.x === x && b.y === y)) ||
-        (food.x === x && food.y === y)
-    );
-    
+
+    let pos;
+    if (preferOpposite && snake.length > 0) {
+        pos = findOppositeSpawnPosition();
+    }
+
+    if (!pos) {
+        pos = findRandomSpawnPosition();
+    }
+
+    if (!pos) {
+        console.warn('Could not spawn evil snake: no valid position found');
+        return;
+    }
+
+    const {x, y} = pos;
     const evil = {
-        body: [{x, y}, {x: x-1, y}, {x: x-2, y}],
+        body: [{x, y}, {x: x + 1, y}, {x: x + 2, y}],
         direction: {x: 1, y: 0}
     };
     evilSnakes.push(evil);
+    console.log('Spawned evil snake at', x, y, 'for mode', evilMode ? 'Evil' : 'Normal');
+}
+
+function findOppositeSpawnPosition() {
+    const px = snake[0].x;
+    const py = snake[0].y;
+    const center = tileCount / 2;
+
+    const startX = px < center ? tileCount - 4 : 1;
+    const dirs = [0, 1, -1, 2, -2, 3, -3];
+
+    for (let dy of dirs) {
+        const y = py + dy;
+        if (y < 0 || y >= tileCount) continue;
+        if (isValidSpawnPosition(startX, y)) return {x: startX, y};
+    }
+
+    return null;
+}
+
+function findRandomSpawnPosition() {
+    let attempts = 0;
+    while (attempts < 200) {
+        const x = Math.floor(Math.random() * (tileCount - 3));
+        const y = Math.floor(Math.random() * tileCount);
+        if (isValidSpawnPosition(x, y)) return {x, y};
+        attempts++;
+    }
+    return null;
+}
+
+function isValidSpawnPosition(x, y) {
+    // const playerHead = snake[0];
+    // const distance = Math.abs(playerHead.x - x) + Math.abs(playerHead.y - y);
+    // if (distance < 4) return false; // not too close to player
+    
+    // Check all body positions are free
+    for (let i = 0; i < 3; i++) {
+        const bx = x + i;
+        const by = y;
+        if (bx >= tileCount || by >= tileCount || bx < 0 || by < 0) return false; // out of bounds
+        if (snake.some(s => s.x === bx && s.y === by)) return false;
+        if (evilSnakes.some(e => e.body.some(b => b.x === bx && b.y === by))) return false;
+        if (food.x === bx && food.y === by) return false;
+    }
+    return true;
 }
 
 function gameOver() {
@@ -191,6 +255,11 @@ function gameOver() {
     updateLeaderboard();
 }
 
+function updateStatus() {
+    evilCountElement.textContent = evilSnakes.length;
+}
+
+
 function startGame() {
     if (gameRunning) return;
     
@@ -201,6 +270,13 @@ function startGame() {
     score = 0;
     scoreElement.textContent = score;
     generateFood();
+    if (evilMode) {
+        spawnEvilSnake(true); // Spawn one immediately on opposite side of player
+        if (evilSnakes.length === 0) {
+            spawnEvilSnake(false); // fallback
+        }
+    }
+    drawGame(); // immediate frame show, no wait
     gameRunning = true;
     gamePaused = false;
     startBtn.disabled = true;
@@ -230,11 +306,11 @@ function pauseGame() {
 function handleKeyPress(e) {
     if (!gameRunning) return;
     
-    const key = e.key;
-    if (key === 'ArrowUp' && direction.y === 0) direction = {x: 0, y: -1};
-    else if (key === 'ArrowDown' && direction.y === 0) direction = {x: 0, y: 1};
-    else if (key === 'ArrowLeft' && direction.x === 0) direction = {x: -1, y: 0};
-    else if (key === 'ArrowRight' && direction.x === 0) direction = {x: 1, y: 0};
+    const key = e.key.toLowerCase();
+    if ((key === 'arrowup' || key === 'w') && direction.y === 0) direction = {x: 0, y: -1};
+    else if ((key === 'arrowdown' || key === 's') && direction.y === 0) direction = {x: 0, y: 1};
+    else if ((key === 'arrowleft' || key === 'a') && direction.x === 0) direction = {x: -1, y: 0};
+    else if ((key === 'arrowright' || key === 'd') && direction.x === 0) direction = {x: 1, y: 0};
 }
 
 startBtn.addEventListener('click', startGame);
@@ -242,7 +318,7 @@ pauseBtn.addEventListener('click', pauseGame);
 restartBtn.addEventListener('click', startGame);
 modeBtn.addEventListener('click', () => {
     evilMode = !evilMode;
-    modeBtn.textContent = evilMode ? 'Normal Mode' : 'Evil Mode';
+    currentModeSpan.textContent = `Current Mode: ${evilMode ? 'Evil' : 'Normal'}`;
 });
 document.addEventListener('keydown', handleKeyPress);
 

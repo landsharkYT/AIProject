@@ -10,14 +10,17 @@
     <div class="container">
         <h1>Snake Game</h1>
         <div class="mode-toggle">
-            <button id="mode-btn">Normal Mode</button>
+            <span id="current-mode">Current Mode: Evil</span>
+            <button id="mode-btn">Toggle Mode</button>
         </div>
         <div class="game-info">
             <div>Score: <span id="score">0</span></div>
             <div>High Score: <span id="high-score">0</span></div>
+            <div>Evil snakes active: <span id="evil-count">0</span></div>
         </div>
         <canvas id="game-canvas" width="400" height="400"></canvas>
         <div class="controls">
+            <p>Use Arrow Keys or WASD to move</p>
             <button id="start-btn">Start Game</button>
             <button id="pause-btn" disabled>Pause</button>
         </div>
