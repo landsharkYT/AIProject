@@ -51,3 +51,4 @@ vhuang7
 Vincent Huang
 https://github.com/landsharkYT/AIProject
 Make a simple website that plays the game Snake but with modifiers and affects. But with an evil snake mode.
+https://brilliant-kitsune-39533c.netlify.app/

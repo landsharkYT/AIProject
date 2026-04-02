@@ -103,15 +103,24 @@ function moveSnake() {
     } else {
         snake.pop();
     }
+    
+    // Check if evil touched player body (evil dies)
+    evilSnakes = evilSnakes.filter(evil => {
+        for (let segment of evil.body) {
+            if (snake.some(s => s.x === segment.x && s.y === segment.y)) {
+                score += 50; // bonus for evil touching us
+                scoreElement.textContent = score;
+                return false; // remove this evil
+            }
+        }
+        return true; // keep this evil
+    });
 }
 
 function moveEvilSnakes() {
     evilSnakes.forEach(evil => {
         const playerHead = snake[0];
         const evilHead = evil.body[0];
-        
-        let dx = playerHead.x - evilHead.x;
-        let dy = playerHead.y - evilHead.y;
         
         // Get valid move options
         const options = [];
@@ -131,17 +140,22 @@ function moveEvilSnakes() {
             // Check self collision
             if (evil.body.some(segment => segment.x === newHead.x && segment.y === newHead.y)) continue;
             
-            // Check reverse
-            if (dir.x === -evil.direction.x && dir.y === -evil.direction.y) continue;
+            // Check reverse (allow but deprioritize)
+            const isReverse = dir.x === -evil.direction.x && dir.y === -evil.direction.y;
             
-            // Score this direction by distance to player
-            const distance = Math.abs(playerHead.x - newHead.x) + Math.abs(playerHead.y - newHead.y);
-            options.push({dir, distance});
+            // Score: prefer direction toward player, but add slight randomness to avoid mirroring
+            const dx = playerHead.x - newHead.x;
+            const dy = playerHead.y - newHead.y;
+            const distance = Math.abs(dx) + Math.abs(dy);
+            const randomBonus = Math.random() * 2; // slight randomness
+            const reverseBonus = isReverse ? 10 : 0; // deprioritize reversals
+            
+            options.push({dir, score: distance + randomBonus + reverseBonus});
         }
         
-        // Choose direction that minimizes distance to player
+        // Choose lowest score direction
         if (options.length === 0) {
-            // Trapped, just pick reverse direction if possible
+            // Trapped, try reverse
             const reverseDir = {x: -evil.direction.x, y: -evil.direction.y};
             const reverseHead = {x: evilHead.x + reverseDir.x, y: evilHead.y + reverseDir.y};
             if (reverseHead.x >= 0 && reverseHead.x < tileCount && reverseHead.y >= 0 && reverseHead.y < tileCount) {
@@ -151,7 +165,7 @@ function moveEvilSnakes() {
                 return;
             }
         } else {
-            options.sort((a, b) => a.distance - b.distance);
+            options.sort((a, b) => a.score - b.score);
             evil.direction = options[0].dir;
         }
         
