@@ -9,6 +9,9 @@
 <body>
     <div class="container">
         <h1>Snake Game</h1>
+        <div class="mode-toggle">
+            <button id="mode-btn">Normal Mode</button>
+        </div>
         <div class="game-info">
             <div>Score: <span id="score">0</span></div>
             <div>High Score: <span id="high-score">0</span></div>
@@ -21,6 +24,10 @@
         <div id="game-over" class="hidden">
             <h2>Game Over!</h2>
             <button id="restart-btn">Restart</button>
+        </div>
+        <div class="leaderboard">
+            <h3>Top 20 Scores</h3>
+            <ol id="score-list"></ol>
         </div>
     </div>
     <script src="script.js"></script>
